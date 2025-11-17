@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Night Harvest — RTS Survival Casual</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="ui">
+    <div id="hud">
+      <div id="dayinfo">Day 1 — <span id="timeOfDay">Day</span></div>
+      <div id="resources">Scrap: <span id="scrap">0</span></div>
+      <div id="controls">
+        <button id="deployUnit">Deploy Drone (50)</button>
+        <button id="buildLight">Build Light (75)</button>
+      </div>
+    </div>
+    <div id="help">Click to select/place. Drones auto-gather scrap. Survive nights.</div>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <script src="main.js"></script>
+</body>
+</html>
