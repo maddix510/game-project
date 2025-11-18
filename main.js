@@ -25,6 +25,7 @@ let state = {
   waveMsg: '',
   waveMsgTimer: 0
 };
+state.gameOver = false;
 
 // create base at center
 state.base.x = () => canvas.width/2;
@@ -46,10 +47,10 @@ canvas.addEventListener('click', e=>{
   // Click near base -> select base (future). For now place a light if buildMode
 });
 
-deployBtn.addEventListener('click', ()=>{ if(state.scrap>=50){ spawnUnit(); state.scrap-=50 } });
-buildBtn.addEventListener('click', ()=>{ if(state.scrap>=75){ placeMode=!placeMode; placeLightBtn.style.display=placeMode?'inline':'none' } });
+deployBtn.addEventListener('click', ()=>{ if(state.gameOver) return; if(state.scrap>=50){ spawnUnit(); state.scrap-=50 } });
+buildBtn.addEventListener('click', ()=>{ if(state.gameOver) return; if(state.scrap>=75){ placeMode=!placeMode; placeLightBtn.style.display=placeMode?'inline':'none' } });
 canvas.addEventListener('click', e=>{
-  if(!placeMode) return;
+  if(!placeMode || state.gameOver) return;
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   if(state.scrap>=75){ placeLight(x,y); state.scrap-=75; placeMode=false; placeLightBtn.style.display='none' }
@@ -110,15 +111,19 @@ function update(dt){
     if(u.carrying>0){ // return to base
       const bx = state.base.x(), by = state.base.y();
       const dx = bx - u.x, dy = by - u.y; const d = Math.hypot(dx,dy);
-      if(d<8){ state.scrap += Math.floor(u.carrying); u.carrying=0 }
-      else { u.x += (dx/d)*u.speed; u.y += (dy/d)*u.speed }
+      if(d<8){
+        // transfer full carried scrap to base (no floor loss)
+        state.scrap += u.carrying;
+        u.carrying = 0;
+        u.target = null;
+      } else if(d>0) { u.x += (dx/d)*u.speed; u.y += (dy/d)*u.speed }
     } else {
       if(!u.target || u.target.amt<=0) u.target = nearestResource(u);
       if(u.target){ const dx = u.target.x - u.x, dy = u.target.y - u.y, d=Math.hypot(dx,dy);
         if(d<6){ // gather
-          const take = Math.min(10*dt, u.target.amt);
-          u.target.amt -= take; u.carrying += take*0.6; // inefficiency
-        } else { u.x += (dx/d)*u.speed; u.y += (dy/d)*u.speed }
+          const take = Math.min(25*dt, u.target.amt); // faster gather rate
+          u.target.amt -= take; u.carrying += take*0.8; // better efficiency
+        } else if(d>0) { u.x += (dx/d)*u.speed; u.y += (dy/d)*u.speed }
       }
     }
   }
@@ -133,7 +138,7 @@ function update(dt){
       tx = illuminated.x; ty = illuminated.y; 
     }
     const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx,dy);
-    e.x += (dx/d)*e.speed; e.y += (dy/d)*e.speed;
+    if(d>0){ e.x += (dx/d)*e.speed; e.y += (dy/d)*e.speed }
   }
 
   // collisions: enemies vs units/base
@@ -145,12 +150,19 @@ function update(dt){
   // remove dead
   state.enemies = state.enemies.filter(e=>e.hp>0 && inBounds(e));
   state.units = state.units.filter(u=>u.hp>0 && inBounds(u));
+  // expire depleted resources
   state.resources = state.resources.filter(r=>r.amt>1);
 
+  // passive resource decay (nodes slowly shrink over time)
+  for(const r of state.resources){ r.amt -= 0.12*dt; }
+
+  // HUD updates
   scrapEl.textContent = Math.floor(state.scrap);
   healthEl.textContent = Math.max(0,Math.floor(state.base.health));
-  if(state.base.health<=0){ showWave('Base destroyed! Day ' + state.day); }
-  if(state.waveMsgTimer>0){ state.waveMsgTimer-=dt; }
+
+  // game over handling
+  if(state.base.health<=0 && !state.gameOver){ state.gameOver = true; showWave('Base destroyed! Day ' + state.day); state.waveMsgTimer = 9999; }
+  if(state.waveMsgTimer>0 && state.waveMsgTimer<9999){ state.waveMsgTimer-=dt; }
 }
 
 function nearestResource(u){ let best=null,bd=1e9; for(const r of state.resources){ const d=Math.hypot(r.x-u.x,r.y-u.y); if(d<bd){bd=d;best=r}} return best }
