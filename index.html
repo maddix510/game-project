@@ -9,14 +9,16 @@
 <body>
   <div id="ui">
     <div id="hud">
-      <div id="dayinfo">Day 1 — <span id="timeOfDay">Day</span></div>
+      <div id="dayinfo">Day <span id="day">1</span> — <span id="timeOfDay">Day</span></div>
       <div id="resources">Scrap: <span id="scrap">0</span></div>
+      <div id="health">Base HP: <span id="baseHealth">100</span></div>
       <div id="controls">
         <button id="deployUnit">Deploy Drone (50)</button>
         <button id="buildLight">Build Light (75)</button>
+        <button id="placeLightMode" style="display:none">★ Placing... (Click map)</button>
       </div>
     </div>
-    <div id="help">Click to select/place. Drones auto-gather scrap. Survive nights.</div>
+    <div id="help">Drones gather scrap. Build lights to defend at night. Survive as long as you can!</div>
   </div>
 
   <canvas id="game"></canvas>

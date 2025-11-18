@@ -8,16 +8,22 @@ const scrapEl = document.getElementById('scrap');
 const timeEl = document.getElementById('timeOfDay');
 const deployBtn = document.getElementById('deployUnit');
 const buildBtn = document.getElementById('buildLight');
+const dayEl = document.getElementById('day');
+const healthEl = document.getElementById('baseHealth');
+const placeLightBtn = document.getElementById('placeLightMode');
+let placeMode = false;
 
 let state = {
   day:1,
-  time:0, // 0..1 day cycle (0-0.6 day, 0.6-1 night)
+  time:0,
   scrap: 120,
   units: [],
   lights: [],
   enemies: [],
   resources: [],
-  base: {x: null, y: null, health: 100}
+  base: {x: null, y: null, health: 100},
+  waveMsg: '',
+  waveMsgTimer: 0
 };
 
 // create base at center
@@ -41,7 +47,13 @@ canvas.addEventListener('click', e=>{
 });
 
 deployBtn.addEventListener('click', ()=>{ if(state.scrap>=50){ spawnUnit(); state.scrap-=50 } });
-buildBtn.addEventListener('click', ()=>{ if(state.scrap>=75){ placeLight(canvas.width/2+80, canvas.height/2); state.scrap-=75 } });
+buildBtn.addEventListener('click', ()=>{ if(state.scrap>=75){ placeMode=!placeMode; placeLightBtn.style.display=placeMode?'inline':'none' } });
+canvas.addEventListener('click', e=>{
+  if(!placeMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  if(state.scrap>=75){ placeLight(x,y); state.scrap-=75; placeMode=false; placeLightBtn.style.display='none' }
+});
 
 function spawnUnit(){
   const u = {x: state.base.x(), y: state.base.y(), speed:1.6, carrying:0, target:null, hp:20}
@@ -59,7 +71,8 @@ function spawnEnemy(){
   if(edge===1){ x = canvas.width+20; y = Math.random()*canvas.height }
   if(edge===2){ x = Math.random()*canvas.width; y = -20 }
   if(edge===3){ x = Math.random()*canvas.width; y = canvas.height+20 }
-  state.enemies.push({x,y,speed:0.7+Math.random()*0.8, hp:10})
+  const scale = 1 + (state.day-1)*0.15;
+  state.enemies.push({x,y,speed:(0.7+Math.random()*0.8)*scale, hp:10*scale})
 }
 
 // Utility
@@ -77,12 +90,20 @@ requestAnimationFrame(loop);
 
 function update(dt){
   // advance time
-  state.time += dt*0.02; // speed of cycle
-  if(state.time>=1){ state.time=0; state.day++; }
+  state.time += dt*0.02;
+  if(state.time>=1){ state.time=0; state.day++; showWave('Wave ' + state.day + ' survived!'); }
   timeEl.textContent = state.time<0.6? 'Day' : 'Night';
+  dayEl.textContent = state.day;
 
-  // enemy spawn when night
-  if(state.time>=0.6){ enemyTimer += dt; if(enemyTimer>1.2){ enemyTimer=0; spawnEnemy(); } }
+  // enemy spawn when night (scales by day)
+  if(state.time>=0.6){ 
+    enemyTimer += dt; 
+    const spawnRate = Math.max(0.6, 1.2 - (state.day-1)*0.1);
+    if(enemyTimer > spawnRate){ enemyTimer=0; spawnEnemy(); } 
+  } else if(state.time<0.15) {
+    // regenerate resources at day start
+    if(Math.random()<0.05){ state.resources.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,amt:50+Math.random()*100}) }
+  }
 
   // units behavior: if not carrying, go to nearest resource; if carrying, return to base
   for(const u of state.units){
@@ -127,10 +148,16 @@ function update(dt){
   state.resources = state.resources.filter(r=>r.amt>1);
 
   scrapEl.textContent = Math.floor(state.scrap);
+  healthEl.textContent = Math.max(0,Math.floor(state.base.health));
+  if(state.base.health<=0){ showWave('Base destroyed! Day ' + state.day); }
+  if(state.waveMsgTimer>0){ state.waveMsgTimer-=dt; }
 }
 
 function nearestResource(u){ let best=null,bd=1e9; for(const r of state.resources){ const d=Math.hypot(r.x-u.x,r.y-u.y); if(d<bd){bd=d;best=r}} return best }
 function inBounds(o){ return o.x>-100 && o.x<canvas.width+100 && o.y>-100 && o.y<canvas.height+100 }
+function showWave(msg){ state.waveMsg = msg; state.waveMsgTimer = 2.5; }
+let lastMouseX=0, lastMouseY=0;
+canvas.addEventListener('mousemove', e=>{ const rect = canvas.getBoundingClientRect(); lastMouseX = e.clientX - rect.left; lastMouseY = e.clientY - rect.top; });
 
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -170,8 +197,29 @@ function render(){
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  // HUD overlays: day count
-  ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(8,8,180,42);
+  // draw placement preview
+  if(placeMode){
+    ctx.strokeStyle='rgba(255,209,102,0.6)';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(lastMouseX || canvas.width/2, lastMouseY || canvas.height/2, 140, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.fillStyle='rgba(255,209,102,0.15)';
+    ctx.beginPath();
+    ctx.arc(lastMouseX || canvas.width/2, lastMouseY || canvas.height/2, 140, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // wave message
+  if(state.waveMsgTimer>0){
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(canvas.width/2-120, canvas.height/2-40, 240, 80);
+    ctx.fillStyle = '#ffd166';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(state.waveMsg, canvas.width/2, canvas.height/2+5);
+    ctx.textAlign = 'left';
+  }
 }
 
 // simple automatic starting units
