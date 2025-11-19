@@ -16,9 +16,17 @@
         <button id="deployUnit">Deploy Drone (50)</button>
         <button id="buildLight">Build Light (75)</button>
         <button id="placeLightMode" style="display:none">★ Placing... (Click map)</button>
+        <button id="shopBtn">🛍️ Shop</button>
       </div>
     </div>
-    <div id="help">Drones gather scrap. Build lights to defend at night. Survive as long as you can!</div>
+    <div id="help">Drones gather scrap. Build lights to defend at night. Buy upgrades in shop!</div>
+    <div id="shop" style="display:none;background:rgba(0,0,0,0.9);padding:12px;border-radius:8px;margin-top:8px;min-width:250px">
+      <div style="color:#ffd166;font-weight:bold;margin-bottom:8px">⚙️ Upgrades</div>
+      <button id="upgradeGather">Gather +50% (100)</button>
+      <button id="upgradeDroneHP">Drone HP +5 (120)</button>
+      <button id="upgradeLightRange">Light Range +40 (150)</button>
+      <button id="shopClose">Close Shop</button>
+    </div>
   </div>
 
   <canvas id="game"></canvas>

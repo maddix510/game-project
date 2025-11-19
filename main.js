@@ -11,7 +11,15 @@ const buildBtn = document.getElementById('buildLight');
 const dayEl = document.getElementById('day');
 const healthEl = document.getElementById('baseHealth');
 const placeLightBtn = document.getElementById('placeLightMode');
+const shopBtn = document.getElementById('shopBtn');
+const shopPanel = document.getElementById('shop');
+const shopClose = document.getElementById('shopClose');
+const upgradeGather = document.getElementById('upgradeGather');
+const upgradeDroneHP = document.getElementById('upgradeDroneHP');
+const upgradeLightRange = document.getElementById('upgradeLightRange');
+
 let placeMode = false;
+let shopOpen = false;
 
 let state = {
   day:1,
@@ -23,9 +31,12 @@ let state = {
   resources: [],
   base: {x: null, y: null, health: 100},
   waveMsg: '',
-  waveMsgTimer: 0
+  waveMsgTimer: 0,
+  gameOver: false,
+  gatherRate: 1.0,
+  droneHP: 20,
+  lightRange: 140
 };
-state.gameOver = false;
 
 // create base at center
 state.base.x = () => canvas.width/2;
@@ -49,6 +60,11 @@ canvas.addEventListener('click', e=>{
 
 deployBtn.addEventListener('click', ()=>{ if(state.gameOver) return; if(state.scrap>=50){ spawnUnit(); state.scrap-=50 } });
 buildBtn.addEventListener('click', ()=>{ if(state.gameOver) return; if(state.scrap>=75){ placeMode=!placeMode; placeLightBtn.style.display=placeMode?'inline':'none' } });
+shopBtn.addEventListener('click', ()=>{ shopOpen=!shopOpen; shopPanel.style.display=shopOpen?'block':'none' });
+shopClose.addEventListener('click', ()=>{ shopOpen=false; shopPanel.style.display='none' });
+upgradeGather.addEventListener('click', ()=>{ if(state.scrap>=100){ state.scrap-=100; state.gatherRate*=1.5; upgradeGather.disabled=true; playSound('upgrade') } });
+upgradeDroneHP.addEventListener('click', ()=>{ if(state.scrap>=120){ state.scrap-=120; state.droneHP+=5; upgradeDroneHP.disabled=true; playSound('upgrade') } });
+upgradeLightRange.addEventListener('click', ()=>{ if(state.scrap>=150){ state.scrap-=150; state.lightRange+=40; upgradeLightRange.disabled=true; playSound('upgrade') } });
 canvas.addEventListener('click', e=>{
   if(!placeMode || state.gameOver) return;
   const rect = canvas.getBoundingClientRect();
@@ -57,15 +73,14 @@ canvas.addEventListener('click', e=>{
 });
 
 function spawnUnit(){
-  const u = {x: state.base.x(), y: state.base.y(), speed:1.6, carrying:0, target:null, hp:20}
+  const u = {x: state.base.x(), y: state.base.y(), speed:1.6, carrying:0, target:null, hp:state.droneHP, type:'worker'}
   state.units.push(u);
 }
 
-function placeLight(x,y){ state.lights.push({x,y,range:140}) }
+function placeLight(x,y){ state.lights.push({x,y,range:state.lightRange}) }
 
 // Enemy spawning at night
 function spawnEnemy(){
-  // spawn from edges
   const edge = Math.floor(Math.random()*4);
   let x=0,y=0;
   if(edge===0){ x = -20; y = Math.random()*canvas.height }
@@ -73,11 +88,62 @@ function spawnEnemy(){
   if(edge===2){ x = Math.random()*canvas.width; y = -20 }
   if(edge===3){ x = Math.random()*canvas.width; y = canvas.height+20 }
   const scale = 1 + (state.day-1)*0.15;
-  state.enemies.push({x,y,speed:(0.7+Math.random()*0.8)*scale, hp:10*scale})
+  // spawn random enemy type
+  const rand = Math.random();
+  let type = 'scout', speed = (0.7+Math.random()*0.8)*scale, hp = 10*scale;
+  if(rand < 0.2){ type = 'tank'; speed *= 0.6; hp *= 1.8; } // slower, tougher
+  else if(rand < 0.5){ type = 'scout'; speed *= 1.3; hp *= 0.8; } // faster, frailer
+  state.enemies.push({x,y,speed,hp,type})
 }
 
 // Utility
 function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy) }
+
+// Simple audio synthesis (no files needed!)
+function playSound(type){
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioContext.currentTime;
+    let osc, env;
+    
+    if(type==='upgrade'){
+      // success chime
+      for(let i=0;i<2;i++){
+        osc = audioContext.createOscillator();
+        env = audioContext.createGain();
+        osc.connect(env);
+        env.connect(audioContext.destination);
+        osc.frequency.value = 600 + i*200;
+        env.gain.setValueAtTime(0.1, now);
+        env.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now + i*0.05);
+        osc.stop(now + 0.1 + i*0.05);
+      }
+    } else if(type==='spawn'){
+      // deploy sound
+      osc = audioContext.createOscillator();
+      env = audioContext.createGain();
+      osc.connect(env);
+      env.connect(audioContext.destination);
+      osc.frequency.value = 400;
+      env.gain.setValueAtTime(0.05, now);
+      env.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } else if(type==='hit'){
+      // damage/collision
+      osc = audioContext.createOscillator();
+      env = audioContext.createGain();
+      osc.connect(env);
+      env.connect(audioContext.destination);
+      osc.frequency.value = 200;
+      env.gain.setValueAtTime(0.03, now);
+      env.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.start(now);
+      osc.stop(now + 0.1);
+    }
+  } catch(e){ /* audio not available */ }
+}
 
 // Game loop
 let last = 0, enemyTimer=0, dayTimer=0;
@@ -121,8 +187,8 @@ function update(dt){
       if(!u.target || u.target.amt<=0) u.target = nearestResource(u);
       if(u.target){ const dx = u.target.x - u.x, dy = u.target.y - u.y, d=Math.hypot(dx,dy);
         if(d<6){ // gather
-          const take = Math.min(25*dt, u.target.amt); // faster gather rate
-          u.target.amt -= take; u.carrying += take*0.8; // better efficiency
+          const take = Math.min(25*dt*state.gatherRate, u.target.amt); // apply gatherRate multiplier
+          u.target.amt -= take; u.carrying += take*0.8;
         } else if(d>0) { u.x += (dx/d)*u.speed; u.y += (dy/d)*u.speed }
       }
     }
@@ -143,7 +209,7 @@ function update(dt){
 
   // collisions: enemies vs units/base
   for(const e of state.enemies){
-    for(const u of state.units){ if(Math.hypot(e.x-u.x,e.y-u.y)<12){ u.hp -= 10*dt; e.hp -= 7*dt } }
+    for(const u of state.units){ if(Math.hypot(e.x-u.x,e.y-u.y)<12){ u.hp -= 10*dt; e.hp -= 7*dt; playSound('hit') } }
     if(Math.hypot(e.x-state.base.x(), e.y-state.base.y()) < 24){ state.base.health -= 6*dt; }
   }
 
@@ -198,7 +264,14 @@ function render(){
   for(const u of state.units){ ctx.fillStyle='#88c0ff'; ctx.beginPath(); ctx.arc(u.x,u.y,6,0,Math.PI*2); ctx.fill() }
 
   // enemies
-  for(const e of state.enemies){ ctx.fillStyle='#d9534f'; ctx.beginPath(); ctx.arc(e.x,e.y,9,0,Math.PI*2); ctx.fill() }
+  for(const e of state.enemies){ 
+    ctx.fillStyle = e.type==='tank'? '#ff6b6b' : '#d9534f';
+    ctx.beginPath(); 
+    ctx.arc(e.x,e.y, e.type==='tank'?12:9, 0, Math.PI*2); 
+    ctx.fill();
+    // show type hint
+    if(e.type==='scout'){ ctx.fillStyle='#fff'; ctx.font='8px monospace'; ctx.fillText('S',e.x-2,e.y+3) }
+  }
 
   // dark overlay at night
   if(state.time>=0.6){
