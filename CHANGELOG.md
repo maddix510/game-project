@@ -72,9 +72,9 @@
   - **Drone HP +5:** Increases drone durability. Cost: 120 scrap. One-time purchase.
   - **Light Range +40:** Increases light tower radius for better coverage. Cost: 150 scrap. One-time purchase.
 - **Enemy Types:** Two enemy archetypes now spawn:
-  - **Scout (50% spawn rate, 80% tank spawn rate):** Faster (×1.3) but frailer (×0.8 HP). Marked with "S" label.
-  - **Tank (20% spawn rate):** Slower (×0.6) but tougher (×1.8 HP). Rendered larger (red).
-  - **Default (30% spawn rate):** Balanced stats.
+  - **Scout (fast):** Faster but frailer; marked with "S" label.
+  - **Tank (slow):** Slower but tougher; rendered larger (red).
+  - **Default:** Balanced stats.
 - **Web Audio Synthesis:** Procedural sound effects (no audio files required):
   - **Upgrade Sound:** Two-note chime on purchase.
   - **Spawn Sound:** Short beep when deploying drones.
@@ -99,22 +99,44 @@
 
 ---
 
-## Summary: Progression from Day 1 → Day 4
+## Day 5: Persistence & Unit Control
+**Date:** November 20, 2025
 
-| Aspect | Day 1 | Day 4 |
+### Features
+- **Save / Load / Reset:** Added `Save`, `Load`, and `Reset` buttons in the HUD. Game state (day, scrap, upgrades, lights) is saved to `localStorage` under `nh_save`. A high-score (best day survived) is stored under `nh_highscore`.
+- **Unit Selection & Move Orders:** Click on a drone to select or deselect it. Click empty ground to issue a move command to all selected drones. Selected drones display a subtle ring.
+
+### UX
+- **Selected Count:** HUD shows how many units are currently selected.
+- **Save/load feedback:** Small wave message displays when save/load succeeds or fails.
+
+### Technical
+- Save includes core persistent properties but intentionally avoids serializing volatile objects (like enemies) to keep load simple.
+- Upgrades (gather/droneHP/lightRange) and purchased state are persisted.
+
+### Notes & Next Steps
+- Persistent save supports mid-session continuation and holds upgrades; future work can expand saved fields (unit positions, resource state, etc.).
+- The next day could add unit group selection (drag to select), orders queueing, and an autosave feature.
+
+---
+
+## Summary: Progression from Day 1 → Day 5
+
+| Aspect | Day 1 | Day 5 |
 |--------|-------|-------|
-| **Gameplay Loop** | Basic gather/build/defend | Advanced: gather → upgrade → scale difficulty |
-| **Drones** | Static unit, fixed deployment | Customizable via upgrades, meaningful scrap transfer |
+| **Gameplay Loop** | Basic gather/build/defend | Advanced: gather → upgrade → scale difficulty → persist |
+| **Drones** | Static unit, fixed deployment | Customizable via upgrades, selectable, receive move orders |
 | **Resources** | Infinite nodes | Finite with decay, regen each day |
 | **Enemies** | Single type, flat scaling | Multiple types, day-based difficulty curve |
-| **Feedback** | Visual + wave messages | Visual + procedural audio + upgrades |
-| **Progression** | Survive nights | Survive + invest scrap in upgrades for long-term scaling |
+| **Feedback** | Visual + wave messages | Visual + procedural audio + save/load feedback |
+| **Progression** | Survive nights | Survive + invest scrap in upgrades and persist progress |
 
 ---
 
 ## Next Planned Expansions (Future Days)
-- **Persistent save/load** (localStorage): Track high score, carry progress between sessions.
-- **Advanced unit commands:** Manual selection, movement orders, hold positions.
+- **Drag selection / group tools:** Click-and-drag to select multiple units.
+- **Autosave & load confirmation UI:** Periodic autosave with unobtrusive UI.
+- **Advanced orders:** Attack-move, patrol, hold position, waypointing.
 - **More enemy types:** Ranged attackers, swarmers, bosses.
 - **Map features:** Terrain obstacles, tunnels, regenerating safe zones.
 - **Tutorial/help overlay:** Interactive walkthrough for new players.

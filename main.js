@@ -17,6 +17,10 @@ const shopClose = document.getElementById('shopClose');
 const upgradeGather = document.getElementById('upgradeGather');
 const upgradeDroneHP = document.getElementById('upgradeDroneHP');
 const upgradeLightRange = document.getElementById('upgradeLightRange');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const resetBtn = document.getElementById('resetBtn');
+const selCountEl = document.getElementById('selCount');
 
 let placeMode = false;
 let shopOpen = false;
@@ -37,6 +41,8 @@ let state = {
   droneHP: 20,
   lightRange: 140
 };
+state.upgrades = {gather:false,droneHP:false,lightRange:false};
+state.selected = [];
 
 // create base at center
 state.base.x = () => canvas.width/2;
@@ -62,14 +68,43 @@ deployBtn.addEventListener('click', ()=>{ if(state.gameOver) return; if(state.sc
 buildBtn.addEventListener('click', ()=>{ if(state.gameOver) return; if(state.scrap>=75){ placeMode=!placeMode; placeLightBtn.style.display=placeMode?'inline':'none' } });
 shopBtn.addEventListener('click', ()=>{ shopOpen=!shopOpen; shopPanel.style.display=shopOpen?'block':'none' });
 shopClose.addEventListener('click', ()=>{ shopOpen=false; shopPanel.style.display='none' });
-upgradeGather.addEventListener('click', ()=>{ if(state.scrap>=100){ state.scrap-=100; state.gatherRate*=1.5; upgradeGather.disabled=true; playSound('upgrade') } });
-upgradeDroneHP.addEventListener('click', ()=>{ if(state.scrap>=120){ state.scrap-=120; state.droneHP+=5; upgradeDroneHP.disabled=true; playSound('upgrade') } });
-upgradeLightRange.addEventListener('click', ()=>{ if(state.scrap>=150){ state.scrap-=150; state.lightRange+=40; upgradeLightRange.disabled=true; playSound('upgrade') } });
+upgradeGather.addEventListener('click', ()=>{ if(state.scrap>=100 && !state.upgrades.gather){ state.scrap-=100; state.gatherRate*=1.5; state.upgrades.gather=true; upgradeGather.disabled=true; playSound('upgrade') } });
+upgradeDroneHP.addEventListener('click', ()=>{ if(state.scrap>=120 && !state.upgrades.droneHP){ state.scrap-=120; state.droneHP+=5; state.upgrades.droneHP=true; upgradeDroneHP.disabled=true; playSound('upgrade') } });
+upgradeLightRange.addEventListener('click', ()=>{ if(state.scrap>=150 && !state.upgrades.lightRange){ state.scrap-=150; state.lightRange+=40; state.upgrades.lightRange=true; upgradeLightRange.disabled=true; playSound('upgrade') } });
+
+// Save / Load / Reset
+saveBtn.addEventListener('click', ()=>{ saveGame(); });
+loadBtn.addEventListener('click', ()=>{ loadGame(); });
+resetBtn.addEventListener('click', ()=>{ if(confirm('Reset game and clears saves?')){ localStorage.removeItem('nh_save'); localStorage.removeItem('nh_highscore'); location.reload() } });
+
 canvas.addEventListener('click', e=>{
-  if(!placeMode || state.gameOver) return;
+  // If placing a light, handle in place mode
+  if(placeMode && !state.gameOver){
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    if(state.scrap>=75){ placeLight(x,y); state.scrap-=75; placeMode=false; placeLightBtn.style.display='none'; playSound('spawn') }
+    return;
+  }
+
+  // selection / move command
+  if(state.gameOver) return;
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
-  if(state.scrap>=75){ placeLight(x,y); state.scrap-=75; placeMode=false; placeLightBtn.style.display='none' }
+  // find nearest unit within radius
+  const radius = 14;
+  let picked = null; let pd = 1e9;
+  for(const u of state.units){ const d = Math.hypot(u.x-x,u.y-y); if(d < pd && d < radius){ pd=d; picked=u } }
+  if(picked){
+    // toggle selection
+    const idx = state.selected.indexOf(picked);
+    if(idx === -1) state.selected.push(picked); else state.selected.splice(idx,1);
+  } else {
+    // issue move command to selected units
+    if(state.selected.length>0){
+      for(const u of state.selected){ u.target = {x,y,manual:true}; }
+    }
+  }
+  selCountEl.textContent = state.selected.length;
 });
 
 function spawnUnit(){
@@ -225,6 +260,7 @@ function update(dt){
   // HUD updates
   scrapEl.textContent = Math.floor(state.scrap);
   healthEl.textContent = Math.max(0,Math.floor(state.base.health));
+  selCountEl.textContent = state.selected.length;
 
   // game over handling
   if(state.base.health<=0 && !state.gameOver){ state.gameOver = true; showWave('Base destroyed! Day ' + state.day); state.waveMsgTimer = 9999; }
@@ -236,6 +272,41 @@ function inBounds(o){ return o.x>-100 && o.x<canvas.width+100 && o.y>-100 && o.y
 function showWave(msg){ state.waveMsg = msg; state.waveMsgTimer = 2.5; }
 let lastMouseX=0, lastMouseY=0;
 canvas.addEventListener('mousemove', e=>{ const rect = canvas.getBoundingClientRect(); lastMouseX = e.clientX - rect.left; lastMouseY = e.clientY - rect.top; });
+
+// Save / Load functions (localStorage)
+function saveGame(){
+  const save = {
+    day: state.day,
+    scrap: state.scrap,
+    gatherRate: state.gatherRate,
+    droneHP: state.droneHP,
+    lightRange: state.lightRange,
+    upgrades: state.upgrades,
+    lights: state.lights.map(l=>({x:l.x,y:l.y,range:l.range})),
+    highscore: getHighscore()
+  };
+  try{ localStorage.setItem('nh_save', JSON.stringify(save)); showWave('Game saved'); }catch(e){ showWave('Save failed') }
+}
+
+function loadGame(){
+  try{
+    const raw = localStorage.getItem('nh_save'); if(!raw){ showWave('No save found'); return }
+    const save = JSON.parse(raw);
+    state.day = save.day||state.day; state.scrap = save.scrap||state.scrap;
+    state.gatherRate = save.gatherRate||state.gatherRate; state.droneHP = save.droneHP||state.droneHP; state.lightRange = save.lightRange||state.lightRange;
+    state.upgrades = save.upgrades||state.upgrades;
+    state.lights = (save.lights||[]).map(l=>({x:l.x,y:l.y,range:l.range}));
+    // apply upgrade UI disabling
+    if(state.upgrades.gather) upgradeGather.disabled=true;
+    if(state.upgrades.droneHP) upgradeDroneHP.disabled=true;
+    if(state.upgrades.lightRange) upgradeLightRange.disabled=true;
+    showWave('Save loaded');
+  }catch(e){ showWave('Load failed') }
+}
+
+function getHighscore(){ try{ const v = parseInt(localStorage.getItem('nh_highscore')||'0'); return isNaN(v)?0:v }catch(e){ return 0 } }
+function setHighscore(v){ try{ localStorage.setItem('nh_highscore', String(v)) }catch(e){} }
+
 
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -305,6 +376,17 @@ function render(){
     ctx.fillText(state.waveMsg, canvas.width/2, canvas.height/2+5);
     ctx.textAlign = 'left';
   }
+
+  // draw selection rings for selected units
+  for(const u of state.selected){
+    ctx.strokeStyle = 'rgba(136,192,255,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(u.x,u.y,10,0,Math.PI*2); ctx.stroke();
+  }
+
+  // draw highscore on HUD corner
+  const hs = getHighscore();
+  ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(canvas.width-180,8,172,34);
+  ctx.fillStyle = '#ffd166'; ctx.font='12px monospace'; ctx.fillText('High Day: '+hs, canvas.width-170, 30);
 }
 
 // simple automatic starting units

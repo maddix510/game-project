@@ -18,3 +18,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:#ddd}
 
 /* Responsive */
 @media (max-width:600px){#hud{flex-direction:column;align-items:flex-start}}
+
+#selection{font-size:13px}
+#saveBtn,#loadBtn,#resetBtn{margin-left:6px;padding:6px 8px;border-radius:6px;border:0;background:#8ab6ff;color:#052;cursor:pointer}
+#saveBtn:active,#loadBtn:active,#resetBtn:active{transform:translateY(1px)}
+
